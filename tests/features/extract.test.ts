@@ -59,7 +59,7 @@ describe('extractFeatures', () => {
 
     it('symmetry drops when one eye sits higher than the other', () => {
       let face = canonicalFace
-      for (const i of [33, 133, 159, 145]) face = nudge(face, i, 0, -0.02)
+      for (const i of [33, 133, 159, 145]) face = nudge(face, i, 0, -0.04)
       expect(extractFeatures(face).symmetry).toBeLessThan(base.symmetry - 0.01)
     })
 

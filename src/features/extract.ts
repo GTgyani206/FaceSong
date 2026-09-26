@@ -29,18 +29,27 @@ const LM = {
   lowerLipOuter: 17,
   gonionR: 172,
   gonionL: 397,
+  faceEdgeUpperR: 127,
+  faceEdgeUpperL: 356,
+  faceEdgeLowerR: 93,
+  faceEdgeLowerL: 323,
+  nostrilR: 98,
+  nostrilL: 327,
 } as const
 
-/** Mirrored [right, left] pairs used for the symmetry feature. */
+/**
+ * Mirrored [right, left] pairs used for the symmetry feature. Symmetry is an
+ * identity feature, so only points that barely move with expression are used
+ * (no eyelids, brows or lips).
+ */
 const SYMMETRY_PAIRS: readonly (readonly [number, number])[] = [
   [LM.eyeOuterR, LM.eyeOuterL],
   [LM.eyeInnerR, LM.eyeInnerL],
-  [LM.eyeUpperLidR, LM.eyeUpperLidL],
-  [LM.eyeLowerLidR, LM.eyeLowerLidL],
-  [LM.browR, LM.browL],
-  [LM.alaR, LM.alaL],
-  [LM.mouthCornerR, LM.mouthCornerL],
+  [LM.faceEdgeUpperR, LM.faceEdgeUpperL],
   [LM.faceEdgeR, LM.faceEdgeL],
+  [LM.faceEdgeLowerR, LM.faceEdgeLowerL],
+  [LM.alaR, LM.alaL],
+  [LM.nostrilR, LM.nostrilL],
   [LM.gonionR, LM.gonionL],
 ]
 

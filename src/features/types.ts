@@ -60,8 +60,10 @@ export interface FaceFeatures {
   readonly lowerFace: number
   /**
    * 1 − mean vertical mismatch of mirrored pairs along the facial midline,
-   * over face height. 1 = perfectly symmetric. Pairs: 33/263, 133/362,
-   * 159/386, 145/374, 105/334, 129/358, 61/291, 234/454, 172/397.
+   * over face height. 1 = perfectly symmetric. Pairs (rigid points only, so
+   * a raised brow or lopsided smile does not count): 33/263 eye outer,
+   * 133/362 eye inner, 127/356 upper face edge, 234/454 face edge,
+   * 93/323 lower face edge, 129/358 ala, 98/327 nostril, 172/397 jaw.
    * Only the along-midline component is compared, because horizontal
    * offsets are dominated by residual yaw rather than face shape.
    */
@@ -70,20 +72,46 @@ export interface FaceFeatures {
 
 export type FeatureName = keyof FaceFeatures
 
-/** Canonical feature order. Downstream hashing must iterate in this order. */
-export const FEATURE_NAMES = [
+/*
+ * IDENTITY vs EXPRESSION — a hard rule, enforced by tests/features/identity.test.ts.
+ *
+ * Only IDENTITY_FEATURES may influence anything that determines the melody
+ * or the song's identity (i.e. anything in src/engine/ that produces a
+ * SongSpec). The same person must get the same song whether they smile,
+ * blink or raise their eyebrows, so EXPRESSION_FEATURES — which move with
+ * the face's muscles — are for display and debugging only.
+ *
+ * Engine code must consume `QuantizedIdentity` (from `quantizeIdentity`),
+ * never `FaceFeatures`, `QuantizedFeatures` or `FEATURE_NAMES`.
+ *
+ * Caveat: identity features assume a closed mouth. Opening the jaw moves the
+ * chin (152), which shifts faceAspect, jawAngle and lowerFace.
+ */
+
+/** Bone-structure features. Canonical order: seed hashing must iterate in this order. */
+export const IDENTITY_FEATURES = [
   'faceAspect',
   'eyeSpacing',
-  'eyeOpenness',
   'noseLength',
   'noseWidth',
-  'mouthWidth',
-  'lipThickness',
   'jawAngle',
-  'browHeight',
   'lowerFace',
   'symmetry',
 ] as const satisfies readonly FeatureName[]
+
+/** Features that change with facial expression. Never used for song identity. */
+export const EXPRESSION_FEATURES = [
+  'eyeOpenness',
+  'browHeight',
+  'mouthWidth',
+  'lipThickness',
+] as const satisfies readonly FeatureName[]
+
+export type IdentityFeatureName = (typeof IDENTITY_FEATURES)[number]
+export type ExpressionFeatureName = (typeof EXPRESSION_FEATURES)[number]
+
+/** Every feature, identity first. For display, debugging and validation. */
+export const FEATURE_NAMES: readonly FeatureName[] = [...IDENTITY_FEATURES, ...EXPRESSION_FEATURES]
 
 /**
  * Head orientation in degrees, relative to the MediaPipe canonical face

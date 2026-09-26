@@ -7,12 +7,19 @@ import { checkPose, DEFAULT_POSE_LIMITS, estimateHeadPose, type PoseLimits, type
 import type { FaceFeatures, HeadPose, Landmark } from './types.ts'
 
 export { extractFeatures } from './extract.ts'
-export { checkPose, DEFAULT_POSE_LIMITS, estimateHeadPose } from './pose.ts'
-export type { PoseLimits, PoseRejection } from './pose.ts'
-export { DEFAULT_BINS, FEATURE_RANGES, quantize } from './quantize.ts'
-export type { QuantizedFeatures } from './quantize.ts'
-export { FEATURE_NAMES, LANDMARK_COUNT } from './types.ts'
-export type { FaceFeatures, FeatureName, HeadPose, Landmark } from './types.ts'
+export { checkPose, DEFAULT_POSE_LIMITS, estimateHeadPose, eulerFromRotation } from './pose.ts'
+export type { Mat3, PoseLimits, PoseRejection } from './pose.ts'
+export { DEFAULT_BINS, FEATURE_RANGES, quantize, quantizeIdentity } from './quantize.ts'
+export type { QuantizedFeatures, QuantizedIdentity } from './quantize.ts'
+export { EXPRESSION_FEATURES, FEATURE_NAMES, IDENTITY_FEATURES, LANDMARK_COUNT } from './types.ts'
+export type {
+  ExpressionFeatureName,
+  FaceFeatures,
+  FeatureName,
+  HeadPose,
+  IdentityFeatureName,
+  Landmark,
+} from './types.ts'
 
 export type FaceAnalysis =
   | { readonly ok: true; readonly pose: HeadPose; readonly features: FaceFeatures }

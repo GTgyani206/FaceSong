@@ -45,7 +45,7 @@ const CANONICAL: Readonly<Record<number, Vec3>> = {
 }
 
 /** Rotation matrix, row-major: m[row][col]. */
-type Mat3 = readonly [readonly [number, number, number], readonly [number, number, number], readonly [number, number, number]]
+export type Mat3 = readonly [readonly [number, number, number], readonly [number, number, number], readonly [number, number, number]]
 
 /** Columns: across (right→left), up (in-plane, ⟂ across), normal. */
 function faceFrame(at: (i: number) => Vec3): Mat3 {
@@ -69,12 +69,22 @@ export function estimateHeadPose(landmarks: readonly Landmark[]): HeadPose {
   const c = CANONICAL_FRAME
   // R = F_observed · F_canonicalᵀ
   const r = (i: number, j: number) => f[i][0] * c[j][0] + f[i][1] * c[j][1] + f[i][2] * c[j][2]
+  return eulerFromRotation([
+    [r(0, 0), r(0, 1), r(0, 2)],
+    [r(1, 0), r(1, 1), r(1, 2)],
+    [r(2, 0), r(2, 1), r(2, 2)],
+  ])
+}
 
-  // Decompose R = Ry(yaw) · Rx(pitch) · Rz(roll).
+/**
+ * Decompose an image-space rotation (canonical face → observed face) as
+ * R = Ry(yaw) · Rx(pitch) · Rz(roll).
+ */
+export function eulerFromRotation(r: Mat3): HeadPose {
   return {
-    yaw: toDegrees(Math.atan2(r(0, 2), r(2, 2))),
-    pitch: toDegrees(Math.asin(Math.max(-1, Math.min(1, -r(1, 2))))),
-    roll: toDegrees(Math.atan2(r(1, 0), r(1, 1))),
+    yaw: toDegrees(Math.atan2(r[0][2], r[2][2])),
+    pitch: toDegrees(Math.asin(Math.max(-1, Math.min(1, -r[1][2])))),
+    roll: toDegrees(Math.atan2(r[1][0], r[1][1])),
   }
 }
 
