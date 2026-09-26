@@ -8,6 +8,5 @@ export default defineConfig({
     // features/ and engine/ must run in plain Node — no DOM.
     environment: 'node',
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
-    passWithNoTests: true,
   },
 })
