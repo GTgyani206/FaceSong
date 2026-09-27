@@ -60,8 +60,6 @@ export interface FaceFeatures {
   readonly jawAngle: number
   /** Mean brow-to-upper-lid distance over W. Right: 105 → 159. Left: 334 → 386. */
   readonly browHeight: number
-  /** Share of eye-line → chin (152) that lies below subnasale 2, measured perpendicular to the eye line. */
-  readonly lowerFace: number
   /**
    * 1 − mean vertical mismatch of mirrored pairs along the facial midline,
    * over W. 1 = perfectly symmetric. Pairs are internal eye/nose points only
@@ -83,23 +81,34 @@ export type FeatureName = keyof FaceFeatures
  * blink or raise their eyebrows, so EXPRESSION_FEATURES — which move with
  * the face's muscles — are for display and debugging only.
  *
+ * Identity itself comes in two kinds, split by how stable MediaPipe makes them
+ * (measured on rotated copies of real photos):
+ *
+ * - DISCRETE_IDENTITY: internal eye/nose geometry, ~2–3% landmark noise.
+ *   Quantized to DISCRETE_BINS bins. These are the ONLY inputs the engine may
+ *   use for discrete musical choices (seed, key, mode, instrument, chord
+ *   progression, melody motif, …).
+ * - CONTINUOUS_IDENTITY: chin/jaw-dependent geometry, ~4% noise — too noisy
+ *   for bins. Exported as normalized 0–1 values. The engine may only map
+ *   them to continuous parameters where a small input change makes a small
+ *   musical change (e.g. tempo within a range, swing, brightness). Never
+ *   hash, threshold or round them into a discrete choice.
+ *
  * Engine code must consume `QuantizedIdentity` (from `quantizeIdentity`),
- * never `FaceFeatures`, `QuantizedFeatures` or `FEATURE_NAMES`.
+ * never `FaceFeatures` or the full-feature helpers.
  *
  * Caveat: identity features assume a closed mouth. Opening the jaw moves the
- * chin (152), which shifts faceAspect, jawAngle and lowerFace.
+ * chin (152), which shifts faceAspect and jawAngle.
  */
 
-/** Bone-structure features. Canonical order: seed hashing must iterate in this order. */
-export const IDENTITY_FEATURES = [
-  'faceAspect',
-  'eyeSpacing',
-  'noseLength',
-  'noseWidth',
-  'jawAngle',
-  'lowerFace',
-  'symmetry',
-] as const satisfies readonly FeatureName[]
+/** Stable identity features, quantized to bins. Canonical order: seed hashing must iterate in this order. */
+export const DISCRETE_IDENTITY = ['noseLength', 'noseWidth', 'eyeSpacing'] as const satisfies readonly FeatureName[]
+
+/** Noisier identity features, exported as normalized 0–1 values only. */
+export const CONTINUOUS_IDENTITY = ['faceAspect', 'jawAngle', 'symmetry'] as const satisfies readonly FeatureName[]
+
+/** All bone-structure features: discrete then continuous. */
+export const IDENTITY_FEATURES = [...DISCRETE_IDENTITY, ...CONTINUOUS_IDENTITY] as const
 
 /** Features that change with facial expression. Never used for song identity. */
 export const EXPRESSION_FEATURES = [
@@ -109,6 +118,8 @@ export const EXPRESSION_FEATURES = [
   'lipThickness',
 ] as const satisfies readonly FeatureName[]
 
+export type DiscreteIdentityName = (typeof DISCRETE_IDENTITY)[number]
+export type ContinuousIdentityName = (typeof CONTINUOUS_IDENTITY)[number]
 export type IdentityFeatureName = (typeof IDENTITY_FEATURES)[number]
 export type ExpressionFeatureName = (typeof EXPRESSION_FEATURES)[number]
 

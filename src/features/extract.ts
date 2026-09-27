@@ -103,7 +103,6 @@ export function extractFeatures(landmarks: readonly Landmark[]): FaceFeatures {
     lipThickness: (d(LM.upperLipOuter, LM.upperLipInner) + d(LM.lowerLipInner, LM.lowerLipOuter)) / mouthWidth,
     jawAngle: angle2(mid(LM.jawR), p(LM.chin), mid(LM.jawL)),
     browHeight: (d(LM.browR, LM.eyeUpperLidR) + d(LM.browL, LM.eyeUpperLidL)) / 2 / biocular,
-    lowerFace: (eyeToChin - below(p(LM.subnasale))) / eyeToChin,
     symmetry: symmetry(landmarks, biocular),
   }
 }

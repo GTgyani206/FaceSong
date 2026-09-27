@@ -2,15 +2,13 @@ import type { Landmark } from '../features/index.ts'
 
 /*
  * Upright normalization. MediaPipe's landmarks are least accurate when the
- * face is tilted in the image plane, and that noise is enough to change
- * feature bins. So: estimate roll from the eye corners, redraw the image
- * rotated upright, detect again, and map the landmarks back into the
- * original image's pixel frame. Everything here is pure geometry; the
- * canvas work lives in detector.ts.
+ * face is tilted in the image plane, and they also shift slightly whenever
+ * the image is resampled. So every photo takes the same path, whatever its
+ * roll: estimate roll from the eye corners, redraw the image rotated upright,
+ * detect again, and map the landmarks back into the original image's pixel
+ * frame. Everything here is pure geometry; the canvas work lives in
+ * detector.ts.
  */
-
-/** Re-detect on an upright copy when |roll| exceeds this, in degrees. */
-export const UPRIGHT_THRESHOLD_DEG = 3
 
 /**
  * In-plane roll in degrees from the eye line: eye centres are mean(33, 133)

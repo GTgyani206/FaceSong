@@ -2,13 +2,15 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
+  CONTINUOUS_IDENTITY,
+  DISCRETE_IDENTITY,
   EXPRESSION_FEATURES,
   extractFeatures,
   FEATURE_NAMES,
   IDENTITY_FEATURES,
-  quantize,
   quantizeIdentity,
-  type IdentityFeatureName,
+  type ContinuousIdentityName,
+  type DiscreteIdentityName,
   type QuantizedIdentity,
 } from '../../src/features/index.ts'
 import { canonicalFace, nudge } from '../helpers/face.ts'
@@ -21,15 +23,9 @@ import { canonicalFace, nudge } from '../helpers/face.ts'
 
 describe('feature groups', () => {
   it('splits features into the agreed identity and expression sets', () => {
-    expect([...IDENTITY_FEATURES]).toEqual([
-      'faceAspect',
-      'eyeSpacing',
-      'noseLength',
-      'noseWidth',
-      'jawAngle',
-      'lowerFace',
-      'symmetry',
-    ])
+    expect([...DISCRETE_IDENTITY]).toEqual(['noseLength', 'noseWidth', 'eyeSpacing'])
+    expect([...CONTINUOUS_IDENTITY]).toEqual(['faceAspect', 'jawAngle', 'symmetry'])
+    expect([...IDENTITY_FEATURES]).toEqual([...DISCRETE_IDENTITY, ...CONTINUOUS_IDENTITY])
     expect([...EXPRESSION_FEATURES]).toEqual(['eyeOpenness', 'browHeight', 'mouthWidth', 'lipThickness'])
   })
 
@@ -42,17 +38,12 @@ describe('feature groups', () => {
 })
 
 describe('quantizeIdentity', () => {
-  it('returns identity bins only', () => {
+  it('returns discrete bins and continuous values for identity features only', () => {
     const q = quantizeIdentity(extractFeatures(canonicalFace))
-    expect(Object.keys(q)).toEqual([...IDENTITY_FEATURES])
-    expectTypeOf<keyof QuantizedIdentity>().toEqualTypeOf<IdentityFeatureName>()
-  })
-
-  it('agrees with quantize on the identity subset', () => {
-    const f = extractFeatures(canonicalFace)
-    const all = quantize(f)
-    const identity = quantizeIdentity(f)
-    for (const name of IDENTITY_FEATURES) expect(identity[name], name).toBe(all[name])
+    expect(Object.keys(q.discrete)).toEqual([...DISCRETE_IDENTITY])
+    expect(Object.keys(q.continuous)).toEqual([...CONTINUOUS_IDENTITY])
+    expectTypeOf<keyof QuantizedIdentity['discrete']>().toEqualTypeOf<DiscreteIdentityName>()
+    expectTypeOf<keyof QuantizedIdentity['continuous']>().toEqualTypeOf<ContinuousIdentityName>()
   })
 
   it('ignores expression feature values entirely', () => {
@@ -96,10 +87,10 @@ describe('src/engine uses identity features only', () => {
     'EXPRESSION_FEATURES',
     'FEATURE_NAMES',
     'FaceFeatures',
-    'QuantizedFeatures',
     'extractFeatures',
     'analyzeFace',
-    'quantize',
+    'normalizeFeature',
+    'normalizeFeatures',
   ]
   const forbidden = new RegExp(`\\b(${FORBIDDEN.join('|')})\\b`, 'g')
 
@@ -110,16 +101,16 @@ describe('src/engine uses identity features only', () => {
 
   it('the scanner catches expression access and allows the identity API', () => {
     expect(violations('const m = f.mouthWidth + q.eyeOpenness')).toEqual(['mouthWidth', 'eyeOpenness'])
-    expect(violations('import { quantize, type FaceFeatures } from "../features"')).toEqual([
-      'quantize',
+    expect(violations('import { normalizeFeatures, type FaceFeatures } from "../features"')).toEqual([
+      'normalizeFeatures',
       'FaceFeatures',
     ])
     expect(violations('for (const n of FEATURE_NAMES) seed ^= q[n]')).toEqual(['FEATURE_NAMES'])
     expect(
       violations(`
-        import { IDENTITY_FEATURES, type QuantizedIdentity } from '../features/index.ts'
+        import { DISCRETE_IDENTITY, type QuantizedIdentity } from '../features/index.ts'
         // mouthWidth is deliberately not used here
-        export const seedOf = (q: QuantizedIdentity) => IDENTITY_FEATURES.map((n) => q[n]).join()
+        export const seedOf = (q: QuantizedIdentity) => DISCRETE_IDENTITY.map((n) => q.discrete[n]).join()
         const b = quantizeIdentity
       `),
     ).toEqual([])

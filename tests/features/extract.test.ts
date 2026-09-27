@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractFeatures, FEATURE_NAMES, quantize, type FaceFeatures } from '../../src/features/index.ts'
+import { extractFeatures, FEATURE_NAMES, quantizeIdentity, type FaceFeatures } from '../../src/features/index.ts'
 import { canonicalFace, nudge, rotateInPlane, scale, translate } from '../helpers/face.ts'
 
 const base = extractFeatures(canonicalFace)
@@ -8,8 +8,8 @@ function expectSameFeatures(actual: FaceFeatures, expected: FaceFeatures) {
   for (const name of FEATURE_NAMES) {
     expect(actual[name], name).toBeCloseTo(expected[name], 9)
   }
-  // Quantized bins — what the engine hashes — must be exactly identical.
-  expect(quantize(actual)).toEqual(quantize(expected))
+  // Discrete bins — what the engine hashes — must be exactly identical.
+  expect(quantizeIdentity(actual).discrete).toEqual(quantizeIdentity(expected).discrete)
 }
 
 describe('extractFeatures', () => {

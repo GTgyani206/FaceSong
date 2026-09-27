@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import {
-  DEFAULT_BINS,
+  CONTINUOUS_IDENTITY,
   DEFAULT_POSE_LIMITS,
+  DISCRETE_BINS,
+  DISCRETE_IDENTITY,
   EXPRESSION_FEATURES,
-  IDENTITY_FEATURES,
+  type FaceFeatures,
   type FeatureName,
   type HeadPose,
+  type QuantizedIdentity,
 } from '../../features/index.ts'
 import { loadFaceDetector } from '../../landmarks/index.ts'
 import { analyzePhoto, download, exportFileName, exportJson, type PhotoResult } from './analyze.ts'
@@ -59,7 +62,8 @@ export default function DebugPage() {
         <h1>FaceSong debug</h1>
         <p className="muted">
           Dev only. Photos are processed in this tab and never uploaded. Pose limit ±{DEFAULT_POSE_LIMITS.maxYaw}° yaw,
-          ±{DEFAULT_POSE_LIMITS.maxPitch}° pitch. {DEFAULT_BINS} bins per feature.
+          ±{DEFAULT_POSE_LIMITS.maxPitch}° pitch. Discrete identity: {DISCRETE_BINS} bins. Continuous identity and
+          expression: 0–1, no bins.
         </p>
         <div className="toolbar">
           <label className={`button${status.kind === 'ready' ? '' : ' disabled'}`}>
@@ -126,7 +130,7 @@ function PhotoCard({ result: r }: { result: PhotoResult }) {
       data-size={`${r.bitmap.width}x${r.bitmap.height}`}
       data-roll={r.detection?.roll}
       data-straightened={r.detection?.straightenedBy}
-      data-identity-bins={r.identityBins ? JSON.stringify(r.identityBins) : undefined}
+      data-identity={r.identity ? JSON.stringify(r.identity) : undefined}
       data-features={r.features ? JSON.stringify(r.features) : undefined}
       data-pose={r.pose ? JSON.stringify(r.pose) : undefined}
     >
@@ -140,14 +144,16 @@ function PhotoCard({ result: r }: { result: PhotoResult }) {
         {r.detection && (
           <p className="muted">
             Eye roll {fmtAngle(r.detection.roll)}
-            {r.detection.straightenedBy !== 0
-              ? ` → straightened by ${fmtAngle(r.detection.straightenedBy)} and re-detected`
-              : ' → detected as-is'}
+            {r.detection.straightenedBy !== 0 || Math.abs(r.detection.roll) < 1e-9
+              ? ` → re-detected upright (rotated ${fmtAngle(r.detection.straightenedBy)})`
+              : ' → upright pass found no face; using the first detection'}
           </p>
         )}
         {r.error && <p className="bad">{r.error}</p>}
         {r.pose && <PoseView pose={r.pose} mediapipe={r.mediapipePose} rejected={r.rejected} />}
-        {r.features && r.bins && <FeatureTable features={r.features} bins={r.bins} />}
+        {r.features && r.normalized && r.identity && (
+          <FeatureTable features={r.features} normalized={r.normalized} identity={r.identity} />
+        )}
         {r.detection && <Blendshapes scores={r.detection.blendshapes} />}
         {r.detection && (
           <button type="button" onClick={() => download(exportFileName(r.fileName), exportJson(r))}>
@@ -211,7 +217,16 @@ function PoseView({ pose, mediapipe, rejected }: { pose: HeadPose; mediapipe: He
   )
 }
 
-function FeatureTable({ features, bins }: { features: Record<FeatureName, number>; bins: Record<FeatureName, number> }) {
+function FeatureTable({
+  features,
+  normalized,
+  identity,
+}: {
+  features: FaceFeatures
+  normalized: Readonly<Record<FeatureName, number>>
+  identity: QuantizedIdentity
+}) {
+  const discrete = identity.discrete as Readonly<Record<string, number>>
   const rows = (names: readonly FeatureName[], group: string) =>
     names.map((name, i) => (
       <tr key={name} className={group}>
@@ -222,9 +237,7 @@ function FeatureTable({ features, bins }: { features: Record<FeatureName, number
         )}
         <td>{name}</td>
         <td className="num">{features[name].toFixed(name === 'jawAngle' ? 2 : 4)}</td>
-        <td>
-          <BinBar bin={bins[name]} />
-        </td>
+        <td>{name in discrete ? <BinBar bin={discrete[name]} /> : <Meter value={normalized[name]} />}</td>
       </tr>
     ))
   return (
@@ -234,11 +247,12 @@ function FeatureTable({ features, bins }: { features: Record<FeatureName, number
           <th />
           <th>feature</th>
           <th className="num">value</th>
-          <th>bin</th>
+          <th>engine sees</th>
         </tr>
       </thead>
       <tbody>
-        {rows(IDENTITY_FEATURES, 'identity')}
+        {rows(DISCRETE_IDENTITY, 'discrete')}
+        {rows(CONTINUOUS_IDENTITY, 'continuous')}
         {rows(EXPRESSION_FEATURES, 'expression')}
       </tbody>
     </table>
@@ -247,11 +261,22 @@ function FeatureTable({ features, bins }: { features: Record<FeatureName, number
 
 function BinBar({ bin }: { bin: number }) {
   return (
-    <span className="bins" title={`bin ${bin} of 0–${DEFAULT_BINS - 1}`}>
-      {Array.from({ length: DEFAULT_BINS }, (_, i) => (
+    <span className="bins" title={`bin ${bin} of 0–${DISCRETE_BINS - 1}`}>
+      {Array.from({ length: DISCRETE_BINS }, (_, i) => (
         <span key={i} className={i === bin ? 'on' : ''} />
       ))}
-      <span className="bin-label">{bin}</span>
+      <span className="bin-label">bin {bin}</span>
+    </span>
+  )
+}
+
+function Meter({ value }: { value: number }) {
+  return (
+    <span className="meter" title={`${value.toFixed(3)} of 0–1`}>
+      <span className="track">
+        <span className="fill" style={{ width: `${value * 100}%` }} />
+      </span>
+      <span className="bin-label">{value.toFixed(2)}</span>
     </span>
   )
 }
@@ -269,7 +294,7 @@ function Blendshapes({ scores }: { scores: Readonly<Record<string, number>> }) {
     <div className="blendshapes">
       <p className={jawOpen > JAW_OPEN_WARNING ? 'warn' : 'muted'}>
         jawOpen {jawOpen.toFixed(2)}
-        {jawOpen > JAW_OPEN_WARNING && ' — mouth open: faceAspect, jawAngle and lowerFace are unreliable'}
+        {jawOpen > JAW_OPEN_WARNING && ' — mouth open: faceAspect and jawAngle are unreliable'}
       </p>
       <p className="muted">Top blendshapes: {top.map(([n, s]) => `${n} ${s.toFixed(2)}`).join(', ')}</p>
     </div>

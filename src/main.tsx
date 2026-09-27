@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import { preloadFaceDetector } from './landmarks/index.ts'
 import App from './ui/App.tsx'
 
 createRoot(document.getElementById('root')!).render(
@@ -8,3 +9,6 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// Fetch MediaPipe's model and wasm now, not when the user captures a photo.
+preloadFaceDetector()

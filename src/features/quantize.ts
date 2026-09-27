@@ -1,4 +1,12 @@
-import { FEATURE_NAMES, IDENTITY_FEATURES, type FaceFeatures, type FeatureName, type IdentityFeatureName } from './types.ts'
+import {
+  CONTINUOUS_IDENTITY,
+  DISCRETE_IDENTITY,
+  FEATURE_NAMES,
+  type ContinuousIdentityName,
+  type DiscreteIdentityName,
+  type FaceFeatures,
+  type FeatureName,
+} from './types.ts'
 
 /**
  * Expected [min, max] per feature. Values outside are clamped into the edge
@@ -7,13 +15,13 @@ import { FEATURE_NAMES, IDENTITY_FEATURES, type FaceFeatures, type FeatureName, 
  * real faces. Recalibrate from real-face exports (see /debug).
  */
 export const FEATURE_RANGES: Readonly<Record<FeatureName, readonly [number, number]>> = {
-  // identity
-  faceAspect: [1.05, 1.65], // canonical 1.353
-  eyeSpacing: [0.32, 0.5], // canonical 0.418
+  // discrete identity
   noseLength: [0.45, 0.75], // canonical 0.603
   noseWidth: [0.3, 0.7], // canonical 0.402; one real face 0.578
+  eyeSpacing: [0.32, 0.5], // canonical 0.418
+  // continuous identity
+  faceAspect: [1.05, 1.65], // canonical 1.353
   jawAngle: [95, 145], // degrees; canonical 127.8
-  lowerFace: [0.5, 0.72], // canonical 0.608
   symmetry: [0.96, 1], // canonical 1
   // expression
   eyeOpenness: [0.15, 0.4], // canonical 0.259
@@ -23,44 +31,48 @@ export const FEATURE_RANGES: Readonly<Record<FeatureName, readonly [number, numb
 }
 
 /**
- * Coarse bins absorb landmark jitter between photos of the same face.
- * More bins = more distinct songs but less stability.
+ * Bins per DISCRETE_IDENTITY feature. Coarse on purpose: a bin must be much
+ * wider than the landmark noise so the same face lands in the same bin.
  */
-export const DEFAULT_BINS = 5
-
-/** Each feature as an integer bin in [0, bins − 1]. For display and debugging. */
-export type QuantizedFeatures = Readonly<Record<FeatureName, number>>
+export const DISCRETE_BINS = 3
 
 /**
- * Identity feature bins only — the ONLY feature input the engine may use to
- * determine melody or song identity. See the IDENTITY vs EXPRESSION note in
- * types.ts.
+ * Feature value → position in its expected range, clamped to [0, 1].
+ * Throws on a non-finite value.
  */
-export type QuantizedIdentity = Readonly<Record<IdentityFeatureName, number>>
-
-/** All features → bins. Not for the engine: use `quantizeIdentity`. */
-export function quantize(features: FaceFeatures, bins: number = DEFAULT_BINS): QuantizedFeatures {
-  return quantizeNames(features, FEATURE_NAMES, bins)
+export function normalizeFeature(name: FeatureName, value: number): number {
+  if (!Number.isFinite(value)) throw new RangeError(`Feature ${name} is not finite`)
+  const [min, max] = FEATURE_RANGES[name]
+  return Math.min(1, Math.max(0, (value - min) / (max - min)))
 }
 
-/** Identity features → bins. Expression features are never read. */
-export function quantizeIdentity(features: FaceFeatures, bins: number = DEFAULT_BINS): QuantizedIdentity {
-  return quantizeNames(features, IDENTITY_FEATURES, bins)
-}
-
-function quantizeNames<N extends FeatureName>(
-  features: FaceFeatures,
-  names: readonly N[],
-  bins: number,
-): Readonly<Record<N, number>> {
-  if (!Number.isInteger(bins) || bins < 1) throw new RangeError(`bins must be a positive integer, got ${bins}`)
-  const out = {} as Record<N, number>
-  for (const name of names) {
-    const value = features[name]
-    if (!Number.isFinite(value)) throw new RangeError(`Feature ${name} is not finite`)
-    const [min, max] = FEATURE_RANGES[name]
-    const t = Math.min(1, Math.max(0, (value - min) / (max - min)))
-    out[name] = Math.min(bins - 1, Math.floor(t * bins))
-  }
+/** Every feature normalized to [0, 1]. For display and debugging — not for the engine. */
+export function normalizeFeatures(features: FaceFeatures): Readonly<Record<FeatureName, number>> {
+  const out = {} as Record<FeatureName, number>
+  for (const name of FEATURE_NAMES) out[name] = normalizeFeature(name, features[name])
   return out
+}
+
+/**
+ * The ONLY feature input the engine may use. See the IDENTITY note in types.ts.
+ * - discrete: DISCRETE_IDENTITY bins in [0, DISCRETE_BINS − 1] — the only
+ *   source for discrete musical choices and seed hashing.
+ * - continuous: CONTINUOUS_IDENTITY normalized to [0, 1] — continuous
+ *   parameters only; never hashed, thresholded or rounded into choices.
+ */
+export interface QuantizedIdentity {
+  readonly discrete: Readonly<Record<DiscreteIdentityName, number>>
+  readonly continuous: Readonly<Record<ContinuousIdentityName, number>>
+}
+
+/** Identity features → engine input. Expression features are never read. */
+export function quantizeIdentity(features: FaceFeatures): QuantizedIdentity {
+  const discrete = {} as Record<DiscreteIdentityName, number>
+  for (const name of DISCRETE_IDENTITY) {
+    const t = normalizeFeature(name, features[name])
+    discrete[name] = Math.min(DISCRETE_BINS - 1, Math.floor(t * DISCRETE_BINS))
+  }
+  const continuous = {} as Record<ContinuousIdentityName, number>
+  for (const name of CONTINUOUS_IDENTITY) continuous[name] = normalizeFeature(name, features[name])
+  return { discrete, continuous }
 }

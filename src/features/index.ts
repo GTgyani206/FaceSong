@@ -9,10 +9,19 @@ import type { FaceFeatures, HeadPose, Landmark } from './types.ts'
 export { extractFeatures } from './extract.ts'
 export { checkPose, DEFAULT_POSE_LIMITS, estimateHeadPose, eulerFromRotation } from './pose.ts'
 export type { Mat3, PoseLimits, PoseRejection } from './pose.ts'
-export { DEFAULT_BINS, FEATURE_RANGES, quantize, quantizeIdentity } from './quantize.ts'
-export type { QuantizedFeatures, QuantizedIdentity } from './quantize.ts'
-export { EXPRESSION_FEATURES, FEATURE_NAMES, IDENTITY_FEATURES, LANDMARK_COUNT } from './types.ts'
+export { DISCRETE_BINS, FEATURE_RANGES, normalizeFeature, normalizeFeatures, quantizeIdentity } from './quantize.ts'
+export type { QuantizedIdentity } from './quantize.ts'
+export {
+  CONTINUOUS_IDENTITY,
+  DISCRETE_IDENTITY,
+  EXPRESSION_FEATURES,
+  FEATURE_NAMES,
+  IDENTITY_FEATURES,
+  LANDMARK_COUNT,
+} from './types.ts'
 export type {
+  ContinuousIdentityName,
+  DiscreteIdentityName,
   ExpressionFeatureName,
   FaceFeatures,
   FeatureName,

@@ -12,7 +12,7 @@ import modelAssetPath from '../../.cache/mediapipe/face_landmarker.task?url'
 import type { Landmark } from '../features/index.ts'
 import { toIsotropic, type NormalizedPoint } from './scale.ts'
 import { addInPlaneRoll } from './transform.ts'
-import { eyeRoll, fromUpright, planUpright, UPRIGHT_THRESHOLD_DEG } from './upright.ts'
+import { eyeRoll, fromUpright, planUpright } from './upright.ts'
 
 export interface FaceDetection {
   /** Size of the input image, in pixels. All coordinates are in this frame. */
@@ -23,8 +23,8 @@ export interface FaceDetection {
   /** Eye-line roll of the face in the input image, in degrees. */
   readonly roll: number
   /**
-   * Degrees the image was rotated for the final detection (0 = detected as
-   * given). Landmarks are mapped back to the input frame either way.
+   * Degrees the image was rotated for the final detection (always −roll, or
+   * 0 if the upright pass found no face). Landmarks are in the input frame.
    */
   readonly straightenedBy: number
   /** x, y normalized to width/height, z to width — MediaPipe's convention. */
@@ -86,9 +86,9 @@ export async function createFaceDetector(): Promise<FaceDetector> {
       const first = run(image, width, height)
       if (!first) return null
       const roll = eyeRoll(first.landmarks)
-      if (Math.abs(roll) <= UPRIGHT_THRESHOLD_DEG) return { ...first, roll, straightenedBy: 0 }
 
-      // MediaPipe is least accurate on tilted faces: detect again on an upright copy.
+      // Always detect again on an upright copy, even for small rolls, so every
+      // photo goes through the same resampling and MediaPipe always sees a level face.
       const plan = planUpright(width, height, roll)
       const canvas = new OffscreenCanvas(plan.width, plan.height)
       const ctx = canvas.getContext('2d')

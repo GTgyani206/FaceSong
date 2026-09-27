@@ -3,12 +3,12 @@ import {
   estimateHeadPose,
   eulerFromRotation,
   extractFeatures,
-  quantize,
+  normalizeFeatures,
   quantizeIdentity,
+  type FeatureName,
   type FaceFeatures,
   type HeadPose,
   type PoseRejection,
-  type QuantizedFeatures,
   type QuantizedIdentity,
 } from '../../features/index.ts'
 import { decodeImage, rotationFromTransform, type FaceDetection, type FaceDetector } from '../../landmarks/index.ts'
@@ -24,16 +24,17 @@ export interface PhotoResult {
   readonly mediapipePose: HeadPose | null
   readonly rejected: PoseRejection | null
   readonly features: FaceFeatures | null
-  readonly bins: QuantizedFeatures | null
-  /** What the engine would see. */
-  readonly identityBins: QuantizedIdentity | null
+  /** Every feature placed in its expected range, 0–1. */
+  readonly normalized: Readonly<Record<FeatureName, number>> | null
+  /** Exactly what the engine would see. */
+  readonly identity: QuantizedIdentity | null
   readonly error: string | null
 }
 
 export async function analyzePhoto(detector: FaceDetector, file: File, id: string): Promise<PhotoResult> {
   const bitmap = await decodeImage(file)
   const base = { id, fileName: file.name, bitmap }
-  const empty = { pose: null, mediapipePose: null, rejected: null, features: null, bins: null, identityBins: null }
+  const empty = { pose: null, mediapipePose: null, rejected: null, features: null, normalized: null, identity: null }
   try {
     const detection = detector.detect(bitmap)
     if (!detection) {
@@ -48,8 +49,8 @@ export async function analyzePhoto(detector: FaceDetector, file: File, id: strin
       mediapipePose: detection.transform ? eulerFromRotation(rotationFromTransform(detection.transform)) : null,
       rejected: checkPose(pose),
       features,
-      bins: quantize(features),
-      identityBins: quantizeIdentity(features),
+      normalized: normalizeFeatures(features),
+      identity: quantizeIdentity(features),
       error: null,
     }
   } catch (e) {

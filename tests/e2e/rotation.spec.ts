@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
-import { IDENTITY_FEATURES } from '../../src/features/index.ts'
+import { CONTINUOUS_IDENTITY, DISCRETE_IDENTITY, IDENTITY_FEATURES, type QuantizedIdentity } from '../../src/features/index.ts'
 import { withExifOrientation } from '../helpers/exif.ts'
 
 /*
- * Same face, different framing → same identity bins. Uses MediaPipe's own
+ * Same face, different framing → same identity. Uses MediaPipe's own
  * sample portrait (downloaded once into .cache/, pinned by SHA-256) and
  * derives rotated / mirrored / EXIF-tagged variants from it in the browser.
  */
@@ -32,7 +32,7 @@ interface Card {
   size: string
   roll: number
   straightened: number
-  identityBins: Record<string, number>
+  identity: QuantizedIdentity
   features: Record<string, number>
   pose: { yaw: number; pitch: number; roll: number }
 }
@@ -56,7 +56,7 @@ async function upload(page: Page, files: { name: string; mimeType: string; buffe
         size: d.size!,
         roll: Number(d.roll),
         straightened: Number(d.straightened),
-        identityBins: json(d.identityBins),
+        identity: json(d.identity),
         features: json(d.features),
         pose: json(d.pose),
       }
@@ -92,7 +92,7 @@ async function transformImage(page: Page, src: Buffer, deg: number, mirror: bool
   return Buffer.from(b64, 'base64')
 }
 
-test('rotated, mirrored and EXIF-tagged copies of a face give the same identity bins', async ({ page }) => {
+test('rotated and EXIF-tagged copies keep identity: spread < 5%, same discrete bins', async ({ page }) => {
   const original = await portrait()
   await openDebug(page)
 
@@ -109,36 +109,46 @@ test('rotated, mirrored and EXIF-tagged copies of a face give the same identity 
   ]
   const cards = await upload(page, files)
   const byName = Object.fromEntries(cards.map((c) => [c.file, c]))
+  const base = byName['original.jpg']
+  expect(base.identity, 'original has a face').not.toBeNull()
 
-  // Report for humans: identity values and bins per variant.
+  // Spread = (max − min) / |mean| over the original and its rotated copies.
+  const rotated = ['original.jpg', 'rot+10.png', 'rot-10.png', 'rot+90.png'].map((n) => byName[n])
+  const spread = Object.fromEntries(
+    IDENTITY_FEATURES.map((n) => {
+      const vals = rotated.map((c) => c.features[n])
+      const mean = vals.reduce((a, b) => a + b) / vals.length
+      return [n, (Math.max(...vals) - Math.min(...vals)) / Math.abs(mean)]
+    }),
+  )
+
+  // Report for humans.
   mkdirSync('test-results', { recursive: true })
-  writeFileSync('test-results/rotation-report.json', JSON.stringify(cards, null, 2))
+  writeFileSync('test-results/rotation-report.json', JSON.stringify({ cards, spread }, null, 2))
   console.table(
     cards.map((c) => ({
       file: c.file,
       roll: c.roll.toFixed(1),
-      straightened: c.straightened.toFixed(1),
-      ...Object.fromEntries(IDENTITY_FEATURES.map((n) => [n, `${c.features[n].toFixed(3)} [${c.identityBins[n]}]`])),
+      ...Object.fromEntries(DISCRETE_IDENTITY.map((n) => [n, `${c.features[n].toFixed(3)} [${c.identity.discrete[n]}]`])),
+      ...Object.fromEntries(CONTINUOUS_IDENTITY.map((n) => [n, c.features[n].toFixed(3)])),
     })),
   )
+  console.table(Object.fromEntries(IDENTITY_FEATURES.map((n) => [n, `${(spread[n] * 100).toFixed(2)}%`])))
 
-  const base = byName['original.jpg']
-  expect(base.identityBins, 'original has a face').not.toBeNull()
-  expect(base.straightened).toBe(0)
+  // Every photo takes the upright path, whatever its roll.
+  for (const c of cards) expect(c.straightened, `${c.file} straightened`).toBeCloseTo(-c.roll, 6)
 
-  for (const name of ['rot+10.png', 'rot-10.png']) {
-    const c = byName[name]
-    expect(Math.abs(c.roll), `${name} roll`).toBeGreaterThan(8)
-    expect(c.straightened, `${name} was straightened`).toBeCloseTo(-c.roll, 6)
-    expect(c.identityBins, name).toEqual(base.identityBins)
+  for (const name of IDENTITY_FEATURES) expect(spread[name], `${name} spread across rotations`).toBeLessThan(0.05)
+
+  for (const name of ['rot+10.png', 'rot-10.png', 'rot+90.png']) {
+    expect(byName[name].identity.discrete, `${name} discrete bins`).toEqual(base.identity.discrete)
   }
 
-  // EXIF: decoded upright, so no straightening is needed and the size is the portrait's.
+  // EXIF: decoded upright (portrait size, level face) and same discrete bins.
   const exif = byName['exif-orientation-6.jpg']
   expect(exif.size).toBe(base.size)
   expect(Math.abs(exif.roll)).toBeLessThan(3)
-  expect(exif.straightened).toBe(0)
-  expect(exif.identityBins).toEqual(base.identityBins)
+  expect(exif.identity.discrete).toEqual(base.identity.discrete)
 })
 
 test('uploads honour EXIF orientation (synthetic fixture)', async ({ page }) => {

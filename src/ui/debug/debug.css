@@ -157,6 +157,9 @@ thead th {
   padding-left: 6px;
   border-left: 2px solid var(--accent);
 }
+.features tr.continuous .group {
+  border-left-color: var(--warn);
+}
 .features tr.expression .group {
   border-left-color: var(--expression);
 }
@@ -182,4 +185,23 @@ tr.expression .bins span.on {
 }
 .bin-label {
   margin-left: 6px;
+}
+.meter {
+  display: inline-flex;
+  align-items: center;
+}
+.meter .track {
+  width: 56px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+.meter .fill {
+  display: block;
+  height: 100%;
+  background: var(--warn);
+}
+tr.expression .meter .fill {
+  background: var(--expression);
 }
