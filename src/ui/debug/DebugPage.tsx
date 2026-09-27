@@ -7,12 +7,8 @@ import {
   type FeatureName,
   type HeadPose,
 } from '../../features/index.ts'
-import { createFaceDetector, type FaceDetector } from '../../landmarks/index.ts'
+import { loadFaceDetector } from '../../landmarks/index.ts'
 import { analyzePhoto, download, exportFileName, exportJson, type PhotoResult } from './analyze.ts'
-
-// Shared across StrictMode's double-mounted effects.
-let detectorPromise: Promise<FaceDetector> | null = null
-const getDetector = () => (detectorPromise ??= createFaceDetector())
 
 type Status = { kind: 'loading' } | { kind: 'ready' } | { kind: 'busy'; done: number; total: number } | { kind: 'error'; message: string }
 
@@ -23,7 +19,7 @@ export default function DebugPage() {
   const nextId = useRef(0)
 
   useEffect(() => {
-    getDetector().then(
+    loadFaceDetector().then(
       () => setStatus({ kind: 'ready' }),
       (e) => setStatus({ kind: 'error', message: `Could not load Face Landmarker: ${e}` }),
     )
@@ -32,7 +28,7 @@ export default function DebugPage() {
   const addFiles = useCallback(async (files: File[]) => {
     const images = files.filter((f) => f.type.startsWith('image/'))
     if (images.length === 0) return
-    const detector = await getDetector()
+    const detector = await loadFaceDetector()
     for (let i = 0; i < images.length; i++) {
       setStatus({ kind: 'busy', done: i, total: images.length })
       const result = await analyzePhoto(detector, images[i], `photo-${nextId.current++}`)
@@ -123,7 +119,17 @@ function StatusText({ status }: { status: Status }) {
 
 function PhotoCard({ result: r }: { result: PhotoResult }) {
   return (
-    <article className="card" data-testid="photo-card">
+    <article
+      className="card"
+      data-testid="photo-card"
+      data-file={r.fileName}
+      data-size={`${r.bitmap.width}x${r.bitmap.height}`}
+      data-roll={r.detection?.roll}
+      data-straightened={r.detection?.straightenedBy}
+      data-identity-bins={r.identityBins ? JSON.stringify(r.identityBins) : undefined}
+      data-features={r.features ? JSON.stringify(r.features) : undefined}
+      data-pose={r.pose ? JSON.stringify(r.pose) : undefined}
+    >
       <Preview result={r} />
       <div className="details">
         <h2 title={r.fileName}>{r.fileName}</h2>
@@ -131,6 +137,14 @@ function PhotoCard({ result: r }: { result: PhotoResult }) {
           {r.bitmap.width}×{r.bitmap.height}
           {r.detection && r.detection.faceCount > 1 && <span className="warn"> · {r.detection.faceCount} faces, using the first</span>}
         </p>
+        {r.detection && (
+          <p className="muted">
+            Eye roll {fmtAngle(r.detection.roll)}
+            {r.detection.straightenedBy !== 0
+              ? ` → straightened by ${fmtAngle(r.detection.straightenedBy)} and re-detected`
+              : ' → detected as-is'}
+          </p>
+        )}
         {r.error && <p className="bad">{r.error}</p>}
         {r.pose && <PoseView pose={r.pose} mediapipe={r.mediapipePose} rejected={r.rejected} />}
         {r.features && r.bins && <FeatureTable features={r.features} bins={r.bins} />}

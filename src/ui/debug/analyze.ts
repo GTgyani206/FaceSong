@@ -4,12 +4,14 @@ import {
   eulerFromRotation,
   extractFeatures,
   quantize,
+  quantizeIdentity,
   type FaceFeatures,
   type HeadPose,
   type PoseRejection,
   type QuantizedFeatures,
+  type QuantizedIdentity,
 } from '../../features/index.ts'
-import { rotationFromTransform, type FaceDetection, type FaceDetector } from '../../landmarks/index.ts'
+import { decodeImage, rotationFromTransform, type FaceDetection, type FaceDetector } from '../../landmarks/index.ts'
 
 export interface PhotoResult {
   readonly id: string
@@ -23,17 +25,19 @@ export interface PhotoResult {
   readonly rejected: PoseRejection | null
   readonly features: FaceFeatures | null
   readonly bins: QuantizedFeatures | null
+  /** What the engine would see. */
+  readonly identityBins: QuantizedIdentity | null
   readonly error: string | null
 }
 
 export async function analyzePhoto(detector: FaceDetector, file: File, id: string): Promise<PhotoResult> {
-  // Honour EXIF orientation so what MediaPipe sees matches what the user sees.
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+  const bitmap = await decodeImage(file)
   const base = { id, fileName: file.name, bitmap }
+  const empty = { pose: null, mediapipePose: null, rejected: null, features: null, bins: null, identityBins: null }
   try {
-    const detection = detector.detect(bitmap, bitmap.width, bitmap.height)
+    const detection = detector.detect(bitmap)
     if (!detection) {
-      return { ...base, detection, pose: null, mediapipePose: null, rejected: null, features: null, bins: null, error: 'No face found' }
+      return { ...base, ...empty, detection, error: 'No face found' }
     }
     const pose = estimateHeadPose(detection.landmarks)
     const features = extractFeatures(detection.landmarks)
@@ -45,10 +49,11 @@ export async function analyzePhoto(detector: FaceDetector, file: File, id: strin
       rejected: checkPose(pose),
       features,
       bins: quantize(features),
+      identityBins: quantizeIdentity(features),
       error: null,
     }
   } catch (e) {
-    return { ...base, detection: null, pose: null, mediapipePose: null, rejected: null, features: null, bins: null, error: String(e) }
+    return { ...base, ...empty, detection: null, error: String(e) }
   }
 }
 
@@ -63,6 +68,8 @@ export function exportJson(r: PhotoResult): string {
       imageWidth: d.width,
       imageHeight: d.height,
       faceCount: d.faceCount,
+      roll: d.roll,
+      straightenedBy: d.straightenedBy,
       landmarks: d.landmarks,
       normalizedLandmarks: d.normalized,
       blendshapes: d.blendshapes,

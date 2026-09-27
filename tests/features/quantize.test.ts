@@ -25,10 +25,17 @@ describe('quantize', () => {
     }
   })
 
-  it('puts the canonical face in the middle bin, away from bin edges', () => {
-    // Canonical values sit mid-range (except symmetry, which is at its max).
-    const q = quantize(base)
-    for (const name of FEATURE_NAMES) expect(q[name], name).toBe(name === 'symmetry' ? DEFAULT_BINS - 1 : 2)
+  it('keeps the canonical face away from bin edges', () => {
+    // Invariance tests compare bins, so a canonical value on an edge would
+    // make them flaky. symmetry is exactly 1 and clamps into the top bin.
+    for (const name of FEATURE_NAMES) {
+      const [min, max] = FEATURE_RANGES[name]
+      const t = (base[name] - min) / (max - min)
+      if (t >= 1) continue
+      const frac = t * DEFAULT_BINS - Math.floor(t * DEFAULT_BINS)
+      expect(frac, name).toBeGreaterThan(0.15)
+      expect(frac, name).toBeLessThan(0.85)
+    }
   })
 
   it('splits the range into equal bins', () => {

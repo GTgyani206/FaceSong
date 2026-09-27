@@ -63,6 +63,12 @@ describe('extractFeatures', () => {
       expect(extractFeatures(face).symmetry).toBeLessThan(base.symmetry - 0.01)
     })
 
+    it('ignores unstable face-contour landmarks (forehead top, face and temple edges)', () => {
+      let face = canonicalFace
+      for (const i of [10, 234, 454, 127, 356, 93, 323, 162, 389]) face = nudge(face, i, 0.03, -0.03)
+      expect(extractFeatures(face)).toEqual(base)
+    })
+
     it('ignores the iris landmarks (468–477)', () => {
       expect(extractFeatures(nudge(canonicalFace, 470, 0.05, 0.05))).toEqual(base)
     })

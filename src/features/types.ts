@@ -23,11 +23,18 @@ export const LANDMARK_COUNT = 478
  * All distances are 2D (x, y); z is only used for head pose.
  *
  * Indices refer to the MediaPipe face mesh. "Right"/"left" are the subject's.
+ * Shared terms:
+ * - W, biocular width: outer eye corners 33 → 263. The scale for most ratios.
+ * - Eye line: through the eye centres, mean(33, 133) and mean(362, 263).
+ * - "Below" = signed distance perpendicular to the eye line, toward the chin.
+ *
+ * Identity features avoid the face contour (10, 234, 454, …), whose
+ * landmarks are unstable; only the chin and lower jaw line are used.
  */
 export interface FaceFeatures {
-  /** Face height / face width. Height 10 (forehead top) → 152 (chin); width 234 → 454 (face edges). */
+  /** Chin 152 below the eye line, over W. */
   readonly faceAspect: number
-  /** Inner-eye-corner distance 133 → 362, over face width (234 → 454). */
+  /** Inner-eye-corner distance 133 → 362, over W. */
   readonly eyeSpacing: number
   /**
    * Mean eye height / eye width.
@@ -35,11 +42,11 @@ export interface FaceFeatures {
    * Left eye: 386 → 374 over 362 (inner) → 263 (outer).
    */
   readonly eyeOpenness: number
-  /** Nasion 168 → subnasale 2, over face height (10 → 152). */
+  /** Nasion 168 to subnasale 2, measured perpendicular to the eye line, over W. */
   readonly noseLength: number
-  /** Alar width 129 → 358, over face width (234 → 454). */
+  /** Alar width 129 → 358, over W. */
   readonly noseWidth: number
-  /** Mouth corners 61 → 291, over face width (234 → 454). */
+  /** Mouth corners 61 → 291, over W. */
   readonly mouthWidth: number
   /**
    * Upper lip (0 outer → 13 inner) plus lower lip (14 inner → 17 outer),
@@ -47,25 +54,20 @@ export interface FaceFeatures {
    */
   readonly lipThickness: number
   /**
-   * Mean gonial angle in degrees: angle at 172 between 234 and 152 (right),
-   * angle at 397 between 454 and 152 (left). Smaller = squarer jaw.
+   * Chin angle in degrees: angle at 152 between the lower jaw line on each
+   * side, mean(136, 172) and mean(365, 397). Larger = broader, squarer jaw.
    */
   readonly jawAngle: number
-  /**
-   * Mean brow-to-upper-lid distance over face height (10 → 152).
-   * Right: 105 → 159. Left: 334 → 386.
-   */
+  /** Mean brow-to-upper-lid distance over W. Right: 105 → 159. Left: 334 → 386. */
   readonly browHeight: number
-  /** Subnasale 2 → chin 152, over face height (10 → 152). */
+  /** Share of eye-line → chin (152) that lies below subnasale 2, measured perpendicular to the eye line. */
   readonly lowerFace: number
   /**
    * 1 − mean vertical mismatch of mirrored pairs along the facial midline,
-   * over face height. 1 = perfectly symmetric. Pairs (rigid points only, so
-   * a raised brow or lopsided smile does not count): 33/263 eye outer,
-   * 133/362 eye inner, 127/356 upper face edge, 234/454 face edge,
-   * 93/323 lower face edge, 129/358 ala, 98/327 nostril, 172/397 jaw.
-   * Only the along-midline component is compared, because horizontal
-   * offsets are dominated by residual yaw rather than face shape.
+   * over W. 1 = perfectly symmetric. Pairs are internal eye/nose points only
+   * (no contour, no expressive points): 33/263, 133/362, 243/463, 122/351,
+   * 188/412, 129/358, 64/294, 98/327. Only the along-midline component is
+   * compared, because horizontal offsets are dominated by residual yaw.
    */
   readonly symmetry: number
 }

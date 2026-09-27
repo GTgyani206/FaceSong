@@ -3,20 +3,23 @@ import { FEATURE_NAMES, IDENTITY_FEATURES, type FaceFeatures, type FeatureName, 
 /**
  * Expected [min, max] per feature. Values outside are clamped into the edge
  * bins. Provisional: centred on the MediaPipe canonical face with a plausible
- * human spread; tune against real-face fixtures.
+ * human spread, except noseWidth, whose canonical value is far narrower than
+ * real faces. Recalibrate from real-face exports (see /debug).
  */
 export const FEATURE_RANGES: Readonly<Record<FeatureName, readonly [number, number]>> = {
-  faceAspect: [0.95, 1.4], // canonical 1.152
-  eyeSpacing: [0.18, 0.3], // canonical 0.242
+  // identity
+  faceAspect: [1.05, 1.65], // canonical 1.353
+  eyeSpacing: [0.32, 0.5], // canonical 0.418
+  noseLength: [0.45, 0.75], // canonical 0.603
+  noseWidth: [0.3, 0.7], // canonical 0.402; one real face 0.578
+  jawAngle: [95, 145], // degrees; canonical 127.8
+  lowerFace: [0.5, 0.72], // canonical 0.608
+  symmetry: [0.96, 1], // canonical 1
+  // expression
   eyeOpenness: [0.15, 0.4], // canonical 0.259
-  noseLength: [0.24, 0.37], // canonical 0.303
-  noseWidth: [0.18, 0.29], // canonical 0.233
-  mouthWidth: [0.25, 0.4], // canonical 0.320
+  browHeight: [0.14, 0.38], // canonical 0.258
+  mouthWidth: [0.35, 0.75], // canonical 0.552
   lipThickness: [0.12, 0.45], // canonical 0.287
-  jawAngle: [115, 150], // degrees; canonical 132.2
-  browHeight: [0.08, 0.18], // canonical 0.130
-  lowerFace: [0.34, 0.49], // canonical 0.414
-  symmetry: [0.94, 1], // canonical 1
 }
 
 /**

@@ -2,7 +2,7 @@
 Face photo → deterministic song. Fully client-side; photos never leave the device.
 
 ## Architecture (keep these layers separate)
-- src/landmarks/  — MediaPipe wrapper only (browser). Outputs 478 landmarks in isotropic units (x·width, y·height, z·width) — features/ assumes 1 unit on x = 1 unit on y.
+- src/landmarks/  — MediaPipe wrapper only (browser). Outputs 478 landmarks in isotropic units (x·width, y·height, z·width) — features/ assumes 1 unit on x = 1 unit on y. Decode uploads with `decodeImage` (applies EXIF orientation); faces with |eye roll| > 3° are re-detected on an upright copy. Load MediaPipe only via `loadFaceDetector()` (dynamic import keeps it out of the main bundle).
 - src/features/   — PURE: landmarks → normalized feature vector (scale/rotation invariant ratios). No DOM.
 - src/engine/     — PURE: features → SongSpec JSON (tempo, key, mode, instrument, chords, melody). Seeded PRNG, no Math.random.
 - src/audio/      — Tone.js renderer: SongSpec → sound.
@@ -13,13 +13,15 @@ Face photo → deterministic song. Fully client-side; photos never leave the dev
 - Same input → identical SongSpec, always.
 - Quantize features into bins before hashing to a seed.
 - Geometry only; never use skin tone or color.
+- Identity features must not use face-contour landmarks (10, 234, 454, temple/cheek edges): they are MediaPipe's least stable points. Only the chin (152) and lower jaw line are allowed. Scale by outer eye-corner width (33 → 263).
 - Only IDENTITY_FEATURES may determine melody or song identity: engine/ consumes `QuantizedIdentity` (from `quantizeIdentity`) and nothing else from features/. EXPRESSION_FEATURES are for display/debug only. Enforced by tests/features/identity.test.ts.
 - Melody: scale-locked, chord tones on strong beats, prefer stepwise motion, motif → repeat → variation.
 - Test landmarks using JSON fixtures in tests/fixtures/, not live MediaPipe.
 
 ## Commands
-- `npm run dev` — Vite dev server. First runs scripts/fetch-mediapipe-assets.mjs, which self-hosts the MediaPipe wasm and the SHA-256-pinned model in public/mediapipe/ (gitignored).
+- `npm run dev` / `npm run build` — first run scripts/fetch-mediapipe-assets.mjs, which downloads the SHA-256-pinned model to .cache/mediapipe/ (gitignored). The wasm (SIMD variant only) and model are `?url` imports in src/landmarks/detector.ts.
 - `/debug` (dev only, debug/index.html) — run Face Landmarker on photos, inspect pose/features/bins, download landmark JSON (same shape as tests/fixtures/).
 - `npm run build` — typecheck (`tsc -b`) + production build. `tsconfig.pure.json` checks features/ and engine/ with no DOM or Node types.
 - `npm test` — Vitest (Node environment), single run; `npm run test:watch` for watch mode
 - `npm run lint` — oxlint
+- `npm run test:e2e` — Playwright against /debug with live MediaPipe (rotation/EXIF stability). Writes test-results/rotation-report.json. Needs Chromium (`npx playwright install chromium`).
