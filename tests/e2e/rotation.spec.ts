@@ -1,31 +1,14 @@
-import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { CONTINUOUS_IDENTITY, DISCRETE_IDENTITY, IDENTITY_FEATURES, type QuantizedIdentity } from '../../src/features/index.ts'
 import { withExifOrientation } from '../helpers/exif.ts'
+import { portrait, transformImage } from './helpers.ts'
 
 /*
  * Same face, different framing → same identity. Uses MediaPipe's own
  * sample portrait (downloaded once into .cache/, pinned by SHA-256) and
  * derives rotated / mirrored / EXIF-tagged variants from it in the browser.
  */
-
-const PORTRAIT_URL = 'https://storage.googleapis.com/mediapipe-assets/portrait.jpg'
-const PORTRAIT_SHA256 = 'a6f11efaa834706db23f275b6115058fa87fc7f14362681e6abe14e82749de3e'
-const CACHE = '.cache/test-images'
-
-async function portrait(): Promise<Buffer> {
-  const path = `${CACHE}/portrait.jpg`
-  if (!existsSync(path)) {
-    const res = await fetch(PORTRAIT_URL)
-    if (!res.ok) throw new Error(`Download failed: HTTP ${res.status}`)
-    mkdirSync(CACHE, { recursive: true })
-    writeFileSync(path, Buffer.from(await res.arrayBuffer()))
-  }
-  const buf = readFileSync(path)
-  expect(createHash('sha256').update(buf).digest('hex')).toBe(PORTRAIT_SHA256)
-  return buf
-}
 
 interface Card {
   file: string
@@ -62,34 +45,6 @@ async function upload(page: Page, files: { name: string; mimeType: string; buffe
       }
     }),
   )
-}
-
-/** Rotate (degrees, clockwise on screen) and/or mirror an image on a canvas; returns base64 of `type`. */
-async function transformImage(page: Page, src: Buffer, deg: number, mirror: boolean, type: string): Promise<Buffer> {
-  const b64 = await page.evaluate(
-    async ({ src, deg, mirror, type }) => {
-      const img = new Image()
-      img.src = `data:image/jpeg;base64,${src}`
-      await img.decode()
-      const r = (deg * Math.PI) / 180
-      const [w, h] = [img.width, img.height]
-      const cw = Math.round(Math.abs(w * Math.cos(r)) + Math.abs(h * Math.sin(r)))
-      const ch = Math.round(Math.abs(w * Math.sin(r)) + Math.abs(h * Math.cos(r)))
-      const c = document.createElement('canvas')
-      c.width = cw
-      c.height = ch
-      const g = c.getContext('2d')!
-      g.fillStyle = '#808080'
-      g.fillRect(0, 0, cw, ch)
-      g.translate(cw / 2, ch / 2)
-      g.rotate(r)
-      if (mirror) g.scale(-1, 1)
-      g.drawImage(img, -w / 2, -h / 2)
-      return c.toDataURL(type, 0.95).split(',')[1]
-    },
-    { src: src.toString('base64'), deg, mirror, type },
-  )
-  return Buffer.from(b64, 'base64')
 }
 
 test('rotated and EXIF-tagged copies keep identity: spread < 5%, same discrete bins', async ({ page }) => {

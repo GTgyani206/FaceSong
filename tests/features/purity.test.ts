@@ -27,7 +27,8 @@ describe('pure layers', () => {
   })
 
   it.each(sources)('%s imports nothing impure', (file) => {
-    const text = readFileSync(file, 'utf8')
+    // Comments may mention forbidden things ("no Math.random"); only code counts.
+    const text = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
     for (const [pattern, what] of FORBIDDEN) expect(text, `${file}: ${what}`).not.toMatch(pattern)
   })
 })
